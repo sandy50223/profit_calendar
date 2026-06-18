@@ -94,6 +94,8 @@ details.gd .dc{padding:0 14px 14px}
 .rg-input{width:100%;padding:13px 16px;background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.12);border-radius:12px;color:#f0f0f3;font-size:22px;font-weight:700;text-align:center;letter-spacing:5px;outline:none;margin-bottom:10px;font-family:monospace;transition:border-color .15s}
 .rg-input:focus{border-color:rgba(255,122,114,.45)}
 .rg-input::placeholder{font-size:13px;letter-spacing:0;font-weight:400;color:#444;font-family:'Inter',sans-serif}
+/* Note popup */
+.note-popup{position:fixed;z-index:5000;background:rgba(18,18,28,.97);border:1px solid rgba(255,255,255,.16);border-radius:11px;padding:10px 14px;font-size:13px;color:#f0f0f3;max-width:260px;line-height:1.6;box-shadow:0 8px 32px rgba(0,0,0,.65);word-break:break-all}
 /* Hamburger button (hidden on desktop) */
 .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:200;background:rgba(16,16,22,.95);border:1px solid rgba(255,255,255,.12);border-radius:10px;width:40px;height:40px;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:5px;padding:10px}
 .hamburger span{display:block;width:20px;height:2px;background:#f0f0f3;border-radius:2px;transition:transform .2s,opacity .2s}
@@ -675,7 +677,7 @@ function renderCal() {
       const r=dayRealizedMap[iso]||0
       const bkHtml=r!==0?`<div class="bkd">實${isUSDView?usd(r):wan(r,0)}</div>`:''
       const note=dayNoteMap[iso]||''
-      const noteHtml=note?`<div style="font-size:9px;color:#8a9098;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;margin-top:1px">${note.slice(0,12)}</div>`:''
+      const noteHtml=note?`<div style="font-size:9px;color:#8a9098;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;margin-top:1px" title="${note.replace(/"/g,'&quot;')}">${note.slice(0,10)}${note.length>10?`<span onclick="showNotePopup(this,event)" data-note="${note.replace(/"/g,'&quot;')}" style="cursor:pointer;color:#c0c4cc;font-size:9px">…</span>`:''}` + `</div>`:''
       inner+=`<div class="cc ${celCls}${sel?' sel':''}" onclick="selDay('${iso}')">
         <div><div class="dn-num">${day.getDate()}</div></div>
         <div><div class="pnl ${cl}">${isUSDView?usd(tv):wan(tv,0)}</div>${bkHtml}<div class="pct ${cl}">${pct>=0?'+':''}${pct.toFixed(1)}%</div>${noteHtml}</div>
@@ -974,6 +976,24 @@ function goTab(t){
   if(t==='set') renderSettings()
   else if(t==='trend') renderTrend()
   closeSidebarIfMobile()
+}
+function showNotePopup(el, e) {
+  e.stopPropagation()
+  let pop = document.getElementById('notePopup')
+  if (!pop) {
+    pop = document.createElement('div')
+    pop.id = 'notePopup'
+    pop.className = 'note-popup'
+    document.body.appendChild(pop)
+    document.addEventListener('click', () => pop.style.display='none')
+  }
+  pop.textContent = el.dataset.note
+  pop.style.display = 'block'
+  const rect = el.getBoundingClientRect()
+  const x = Math.max(4, Math.min(rect.left, window.innerWidth - 270))
+  const y = rect.bottom + 6
+  pop.style.left = x + 'px'
+  pop.style.top = (y + 60 > window.innerHeight ? rect.top - 50 : y) + 'px'
 }
 function toggleSidebar(){
   const sb=document.getElementById('sidebar')
