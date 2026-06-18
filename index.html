@@ -22,7 +22,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:radial-gradient(at 8% 6
 /* Calendar */
 .cal-header,.cal-week{display:grid;grid-template-columns:repeat(5,1fr) 1.05fr;gap:7px;margin-bottom:5px}
 .ch-cell{text-align:center;color:#a8acb3;font-size:12px;font-weight:500;letter-spacing:1px;padding:7px 0}
-.cc{border-radius:16px;padding:8px 12px 12px;height:100px;display:flex;flex-direction:column;justify-content:space-between;backdrop-filter:blur(20px);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);box-shadow:0 6px 28px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.07);transition:transform .15s,box-shadow .15s;cursor:pointer;user-select:none}
+.cc{border-radius:16px;padding:8px 12px 12px;height:100px;display:flex;flex-direction:column;justify-content:space-between;backdrop-filter:blur(20px);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);box-shadow:0 6px 28px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.07);transition:transform .15s,box-shadow .15s;cursor:pointer;user-select:none;overflow:hidden}
 .cc:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.10)}
 .cc.up{background:linear-gradient(135deg,rgba(255,90,90,.26) 0%,rgba(160,30,40,.14) 100%),rgba(255,255,255,.02);border-color:rgba(255,130,110,.2)}
 .cc.dn{background:linear-gradient(135deg,rgba(80,220,130,.2) 0%,rgba(20,100,60,.10) 100%),rgba(255,255,255,.02);border-color:rgba(120,230,160,.18)}
@@ -191,7 +191,10 @@ details.gd .dc{padding:0 14px 14px}
         <div class="fg" style="max-width:130px"><label>日期</label><input type="date" id="ccDate"></div>
         <div class="fg" style="max-width:140px"><label>金額（萬，正=投入）</label><input type="number" id="ccAmt" value="0" step="1"></div>
         <div class="fg"><label>備註</label><input type="text" id="ccNote"></div>
-        <div style="align-self:flex-end"><button class="btn btn-p" onclick="doAddCC()">➕ 新增</button></div>
+        <div style="align-self:flex-end;display:flex;gap:6px">
+          <button class="btn btn-p" id="ccSaveBtn" onclick="doAddCC()">➕ 新增</button>
+          <button class="btn" id="ccCancelBtn" onclick="cancelEditCC()" style="display:none">✕ 取消</button>
+        </div>
       </div>
       <div id="ccMsg" class="alert" style="display:none;margin-top:8px"></div>
       <div id="ccList" style="margin-top:14px"></div>
@@ -304,7 +307,7 @@ function normFbObj(v) {
 
 // DATA LAYER
 const LS = {
-  get accs()   { const v=JSON.parse(localStorage.getItem('pnl_accs')  || '[]'); return Array.isArray(v)?v:[] },
+  get accs()   { const v=JSON.parse(localStorage.getItem('pnl_accs')  || '[]'); const arr=Array.isArray(v)?v:[]; return arr.slice().sort((a,b)=>b.id-a.id) },
   set accs(v)  { localStorage.setItem('pnl_accs',  JSON.stringify(v)); fbWrite('accs',   v) },
   get mpnl()   { const v=JSON.parse(localStorage.getItem('pnl_mpnl') || '{}'); return (v&&!Array.isArray(v))?v:normFbObj(v) },
   set mpnl(v)  { localStorage.setItem('pnl_mpnl',  JSON.stringify(v)); fbWrite('mpnl',   v) },
@@ -347,7 +350,7 @@ function mpnlMonth(aid, ys, ye) {
       if (!out[d]) out[d]={r:0,u:0,note:''}
       out[d].r += v.r||0
       out[d].u += v.u||0
-      if (v.note) out[d].note = [out[d].note,v.note].filter(Boolean).join('/')
+      if (v.note) { const parts=new Set([...(out[d].note?out[d].note.split('/'):[]),v.note]); out[d].note=[...parts].join('/') }
     })
   })
   return out
@@ -450,12 +453,12 @@ function buildSnapByDay(aid,s,e){
     const acc=LS.accs.find(a=>a.id===aid)||{}
     const sd=acc.startDate||s
     const src=LS.snap[aid]||{}
-    Object.entries(src).filter(([d])=>d>=sd&&d<=e).forEach(([d,v])=>{ out[d]=(v.pv||0)+(v.bk||0) })
+    Object.entries(src).filter(([d])=>d>=sd&&d<=e).forEach(([d,v])=>{ const t=(v.pv||0)+(v.bk||0); if(t!==0) out[d]=t })
   } else {
     LS.accs.forEach(a=>{
       const sd=a.startDate||s
       const src=LS.snap[a.id]||{}
-      Object.entries(src).filter(([d])=>d>=sd&&d<=e).forEach(([d,v])=>{ out[d]=(out[d]||0)+(v.pv||0)+(v.bk||0) })
+      Object.entries(src).filter(([d])=>d>=sd&&d<=e).forEach(([d,v])=>{ const t=(v.pv||0)+(v.bk||0); if(t!==0) out[d]=(out[d]||0)+t })
     })
   }
   return out
@@ -468,14 +471,14 @@ function prevBizSnapTotal(aid,targetDate,snapByDay){
     const sd=acc.startDate||''
     const src=LS.snap[aid]||{}
     const cands=Object.entries(src).filter(([d])=>d<targetDate&&(!sd||d>=sd)).sort(([a],[b])=>a<b?1:-1)
-    for(const [d,v] of cands){ const dow=new Date(d+'T00:00:00').getDay(); if(dow>=1&&dow<=5) return (v.pv||0)+(v.bk||0) }
+    for(const [d,v] of cands){ const dow=new Date(d+'T00:00:00').getDay(); const t=(v.pv||0)+(v.bk||0); if(dow>=1&&dow<=5&&t!==0) return t }
     return null
   } else {
     const byDate={}
     LS.accs.forEach(a=>{
       const sd=a.startDate||''
       const src=LS.snap[a.id]||{}
-      Object.entries(src).filter(([d])=>d<targetDate&&(!sd||d>=sd)).forEach(([d,v])=>{ byDate[d]=(byDate[d]||0)+(v.pv||0)+(v.bk||0) })
+      Object.entries(src).filter(([d])=>d<targetDate&&(!sd||d>=sd)).forEach(([d,v])=>{ const t=(v.pv||0)+(v.bk||0); if(t!==0) byDate[d]=(byDate[d]||0)+t })
     })
     const cands=Object.keys(byDate).filter(d=>{ const dow=new Date(d+'T00:00:00').getDay(); return dow>=1&&dow<=5 }).sort().reverse()
     return cands.length?byDate[cands[0]]:null
@@ -677,8 +680,9 @@ function renderCal() {
       const r=dayRealizedMap[iso]||0
       const bkHtml=r!==0?`<div class="bkd">實${isUSDView?usd(r):wan(r,0)}</div>`:''
       const note=dayNoteMap[iso]||''
-      const noteHtml=note?`<div style="font-size:9px;color:#8a9098;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;margin-top:1px" title="${note.replace(/"/g,'&quot;')}">${note.slice(0,10)}${note.length>10?`<span onclick="showNotePopup(this,event)" data-note="${note.replace(/"/g,'&quot;')}" style="cursor:pointer;color:#c0c4cc;font-size:9px">…</span>`:''}` + `</div>`:''
-      inner+=`<div class="cc ${celCls}${sel?' sel':''}" onclick="selDay('${iso}')">
+      const noteHtml=buildNoteHtml(note)
+      const noteEsc=note?note.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''
+      inner+=`<div class="cc ${celCls}${sel?' sel':''}" onclick="selDay('${iso}')"${note?` data-note="${noteEsc}" onmouseenter="showCellNote(this,event)" onmouseleave="hideCellNote()"`:''}>` + `
         <div><div class="dn-num">${day.getDate()}</div></div>
         <div><div class="pnl ${cl}">${isUSDView?usd(tv):wan(tv,0)}</div>${bkHtml}<div class="pct ${cl}">${pct>=0?'+':''}${pct.toFixed(1)}%</div>${noteHtml}</div>
       </div>`
@@ -760,7 +764,7 @@ function saveModal(){
     const pv=parseFloat(document.getElementById(`mpv_${a.id}`)?.value||0)
     const bk=parseFloat(document.getElementById(`mbk_${a.id}`)?.value||0)
     mpnlSet(a.id,iso,r*10000,0,note)
-    snapSet(a.id,iso,pv*10000,bk*10000,note)
+    if(pv!==0||bk!==0) snapSet(a.id,iso,pv*10000,bk*10000,note)
   })
   closeModal()
 }
@@ -855,7 +859,7 @@ function renderSettings(){
       return `<tr><td>${c.id}</td><td>${c.d}</td><td>${accName(c.aid)}</td>
         <td class="${w>=0?'ccp':'ccn'}">${w>=0?'+':''}${w.toFixed(1)}</td>
         <td>${c.note||''}</td>
-        <td><button class="btn btn-d btn-sm" onclick="doDelCC(${c.id})">🗑</button></td></tr>`
+        <td style="white-space:nowrap"><button class="btn btn-sm" onclick="doEditCC(${c.id})" style="margin-right:4px">✏️</button><button class="btn btn-d btn-sm" onclick="doDelCC(${c.id})">🗑</button></td></tr>`
     }).join('')+
     `</tbody></table><p class="caption" style="margin-top:6px">合計：${(total/10000)>=0?'+':''}${(total/10000).toFixed(1)} 萬</p>`
 }
@@ -913,6 +917,7 @@ function doDelAcc(id,name){
   LS.cc=LS.cc.filter(c=>c.aid!==id)
   if(S.aid===id) S.aid=null; render()
 }
+let ccEditId=null
 function doAddCC(){
   const aid=parseInt(document.getElementById('ccAcc').value)
   const d=document.getElementById('ccDate').value
@@ -921,10 +926,38 @@ function doAddCC(){
   const msg=document.getElementById('ccMsg')
   if(!d){ showMsg(msg,'請選擇日期','err'); return }
   if(amt===0){ showMsg(msg,'金額不能為 0','err'); return }
-  ccAdd(aid,d,amt*10000,note)
-  showMsg(msg,`已新增：${d} ${amt>=0?'+':''}${amt.toFixed(1)} 萬`,'ok')
+  if(ccEditId!==null){
+    const arr=LS.cc; const c=arr.find(x=>x.id===ccEditId); if(!c) return
+    c.aid=aid; c.d=d; c.amt=amt*10000; c.note=note
+    LS.cc=arr
+    showMsg(msg,`已更新：${d} ${amt>=0?'+':''}${amt.toFixed(1)} 萬`,'ok')
+    cancelEditCC()
+  } else {
+    ccAdd(aid,d,amt*10000,note)
+    showMsg(msg,`已新增：${d} ${amt>=0?'+':''}${amt.toFixed(1)} 萬`,'ok')
+    document.getElementById('ccAmt').value='0'
+    document.getElementById('ccNote').value=''
+  }
+  renderSettings()
+}
+function doEditCC(id){
+  const c=LS.cc.find(x=>x.id===id); if(!c) return
+  ccEditId=id
+  document.getElementById('ccAcc').value=c.aid
+  document.getElementById('ccDate').value=c.d
+  document.getElementById('ccAmt').value=(c.amt/10000).toFixed(1)
+  document.getElementById('ccNote').value=c.note||''
+  document.getElementById('ccSaveBtn').textContent='💾 更新'
+  document.getElementById('ccSaveBtn').style.background='rgba(255,170,50,.22)'
+  document.getElementById('ccCancelBtn').style.display=''
+}
+function cancelEditCC(){
+  ccEditId=null
   document.getElementById('ccAmt').value='0'
-  document.getElementById('ccNote').value=''; renderSettings()
+  document.getElementById('ccNote').value=''
+  document.getElementById('ccSaveBtn').textContent='➕ 新增'
+  document.getElementById('ccSaveBtn').style.background=''
+  document.getElementById('ccCancelBtn').style.display='none'
 }
 function doDelCC(id){ if(!confirm('確定刪除？')) return; ccDel(id); renderSettings() }
 function doAddTrade(){
@@ -975,7 +1008,17 @@ function goTab(t){
   document.getElementById('tab-'+t).classList.add('active')
   if(t==='set') renderSettings()
   else if(t==='trend') renderTrend()
+  else renderCal()
   closeSidebarIfMobile()
+}
+function buildNoteHtml(note) {
+  if (!note) return ''
+  const esc = note.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  const short = note.length > 10 ? note.slice(0,10) : note
+  const more = note.length > 10
+    ? '<span onclick="showNotePopup(this,event)" data-note="' + esc + '" style="cursor:pointer;color:#c0c4cc;font-size:9px">…</span>'
+    : ''
+  return '<div style="font-size:9px;color:#8a9098;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;margin-top:1px" title="' + esc + '">' + short + more + '</div>'
 }
 function showNotePopup(el, e) {
   e.stopPropagation()
@@ -994,6 +1037,20 @@ function showNotePopup(el, e) {
   const y = rect.bottom + 6
   pop.style.left = x + 'px'
   pop.style.top = (y + 60 > window.innerHeight ? rect.top - 50 : y) + 'px'
+}
+function showCellNote(el,e){
+  const note=el.dataset.note; if(!note) return
+  let pop=document.getElementById('notePopup')
+  if(!pop){ pop=document.createElement('div'); pop.id='notePopup'; pop.className='note-popup'; document.body.appendChild(pop) }
+  pop.textContent=note
+  pop.style.display='block'
+  const r=el.getBoundingClientRect()
+  pop.style.left=Math.max(4,Math.min(r.left,window.innerWidth-270))+'px'
+  const y=r.bottom+6
+  pop.style.top=(y+60>window.innerHeight?r.top-50:y)+'px'
+}
+function hideCellNote(){
+  const pop=document.getElementById('notePopup'); if(pop) pop.style.display='none'
 }
 function toggleSidebar(){
   const sb=document.getElementById('sidebar')
@@ -1101,6 +1158,10 @@ function renderTrend(){
   }
   const active=series.filter(s=>s.data.some(d=>d.hasData))
   if(!active.length){ el.innerHTML='<p class="caption">本期尚無資料。</p>'; return }
+  // Keep only periods where at least one active series has data (skip empty dates)
+  const keptIdx=periods.map((_,i)=>i).filter(i=>active.some(s=>s.data[i]&&s.data[i].hasData))
+  periods=keptIdx.map(i=>periods[i])
+  series.forEach(s=>{ s.data=keptIdx.map(i=>s.data[i]||{pnl:0,pct:0,hasData:false}) })
 
   const W=960, H=330, pL=60, pR=66, pT=44, pB=44
   const iW=W-pL-pR, iH=H-pT-pB, mid=pT+iH/2, n=periods.length
@@ -1222,7 +1283,6 @@ function startRoom(code) {
   FB_ROOM=code
   localStorage.setItem('pnl_room',code)
   updateRoomUI()
-  ensureDefault()
   S.aid=null
   document.getElementById('ccDate').value=todayISO()
   render()
