@@ -1374,30 +1374,25 @@ else { document.getElementById('roomGate').style.display='flex' }
     for(let i=1;i<4;i++){x.beginPath();x.moveTo(10,45*i);x.lineTo(170,45*i);x.stroke()}
     x.restore()
     // trend line
-    const pts=[[18,145],[52,118],[84,128],[118,82],[158,50]]
+    const pts=[[18,148],[52,112],[84,124],[118,72],[158,38]]
     x.save()
     // fill under line
     x.beginPath(); x.moveTo(pts[0][0],pts[0][1])
     for(let i=1;i<pts.length;i++) x.lineTo(pts[i][0],pts[i][1])
-    x.lineTo(158,170); x.lineTo(18,170); x.closePath()
-    const fill=x.createLinearGradient(0,50,0,170)
-    fill.addColorStop(0,'rgba(255,100,90,0.22)'); fill.addColorStop(1,'rgba(255,100,90,0)')
+    x.lineTo(158,175); x.lineTo(18,175); x.closePath()
+    const fill=x.createLinearGradient(0,38,0,175)
+    fill.addColorStop(0,'rgba(255,100,90,0.32)'); fill.addColorStop(1,'rgba(255,100,90,0)')
     x.fillStyle=fill; x.fill()
     // line
     x.beginPath(); x.moveTo(pts[0][0],pts[0][1])
     for(let i=1;i<pts.length;i++) x.lineTo(pts[i][0],pts[i][1])
-    x.strokeStyle='rgba(255,118,108,0.85)'; x.lineWidth=3; x.lineJoin='round'; x.lineCap='round'; x.stroke()
+    x.strokeStyle='rgba(255,118,108,0.95)'; x.lineWidth=4.5; x.lineJoin='round'; x.lineCap='round'; x.stroke()
     // dots
     pts.forEach(([px,py])=>{
-      x.beginPath(); x.arc(px,py,3.5,0,Math.PI*2)
-      x.fillStyle='rgba(255,140,130,0.95)'; x.fill()
+      x.beginPath(); x.arc(px,py,5,0,Math.PI*2)
+      x.fillStyle='rgba(255,150,140,1)'; x.fill()
     })
     x.restore()
-    // "報" character
-    x.font='bold 76px sans-serif'
-    x.fillStyle='rgba(255,255,255,0.90)'
-    x.textAlign='center'; x.textBaseline='middle'
-    x.fillText('報',90,108)
     // set icon
     document.getElementById('pwa-icon').href=c.toDataURL('image/png')
   }catch(e){}
