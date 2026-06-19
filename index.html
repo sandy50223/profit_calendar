@@ -682,7 +682,7 @@ function renderCal() {
       const note=dayNoteMap[iso]||''
       const noteHtml=buildNoteHtml(note)
       const noteEsc=note?note.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''
-      inner+=`<div class="cc ${celCls}${sel?' sel':''}" onclick="selDay('${iso}')"${note?` data-note="${noteEsc}" onmouseenter="showCellNote(this,event)" onmouseleave="hideCellNote()"`:''}>` + `
+      inner+=`<div class="cc ${celCls}${sel?' sel':''}" onclick="selDay('${iso}')"${note?` data-note="${noteEsc}" onpointerenter="showCellNote(this,event)" onpointerleave="hideCellNote()"`:''}>` + `
         <div><div class="dn-num">${day.getDate()}</div></div>
         <div><div class="pnl ${cl}">${isUSDView?usd(tv):wan(tv,0)}</div>${bkHtml}<div class="pct ${cl}">${pct>=0?'+':''}${pct.toFixed(1)}%</div>${noteHtml}</div>
       </div>`
@@ -1014,11 +1014,8 @@ function goTab(t){
 function buildNoteHtml(note) {
   if (!note) return ''
   const esc = note.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-  const short = note.length > 10 ? note.slice(0,10) : note
-  const more = note.length > 10
-    ? '<span onclick="showNotePopup(this,event)" data-note="' + esc + '" style="cursor:pointer;color:#c0c4cc;font-size:9px">…</span>'
-    : ''
-  return '<div style="font-size:9px;color:#8a9098;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;margin-top:1px" title="' + esc + '">' + short + more + '</div>'
+  const short = note.length > 10 ? note.slice(0,10)+'…' : note
+  return '<div onclick="showNotePopup(this,event)" data-note="' + esc + '" style="cursor:pointer;font-size:9px;color:#8a9098;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;margin-top:1px">' + short + '</div>'
 }
 function showNotePopup(el, e) {
   e.stopPropagation()
@@ -1039,6 +1036,7 @@ function showNotePopup(el, e) {
   pop.style.top = (y + 60 > window.innerHeight ? rect.top - 50 : y) + 'px'
 }
 function showCellNote(el,e){
+  if(e.pointerType&&e.pointerType!=='mouse') return
   const note=el.dataset.note; if(!note) return
   let pop=document.getElementById('notePopup')
   if(!pop){ pop=document.createElement('div'); pop.id='notePopup'; pop.className='note-popup'; document.body.appendChild(pop) }
