@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>報酬日曆</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="報酬日曆">
+<link id="pwa-icon" rel="apple-touch-icon" sizes="180x180">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@500;700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1335,6 +1339,69 @@ function switchRoom() {
 const savedRoom=localStorage.getItem('pnl_room')
 if(savedRoom){ startRoom(savedRoom) }
 else { document.getElementById('roomGate').style.display='flex' }
+
+;(function(){
+  try{
+    const c=document.createElement('canvas'); c.width=c.height=180
+    const x=c.getContext('2d')
+    // rounded rect clip
+    function rr(rx,ry,rw,rh,rad){
+      x.beginPath(); x.moveTo(rx+rad,ry)
+      x.lineTo(rx+rw-rad,ry); x.arcTo(rx+rw,ry,rx+rw,ry+rad,rad)
+      x.lineTo(rx+rw,ry+rh-rad); x.arcTo(rx+rw,ry+rh,rx+rw-rad,ry+rh,rad)
+      x.lineTo(rx+rad,ry+rh); x.arcTo(rx,ry+rh,rx,ry+rh-rad,rad)
+      x.lineTo(rx,ry+rad); x.arcTo(rx,ry,rx+rad,ry,rad); x.closePath()
+    }
+    rr(0,0,180,180,38); x.clip()
+    // dark bg
+    const bg=x.createLinearGradient(0,0,180,180)
+    bg.addColorStop(0,'#11102a'); bg.addColorStop(1,'#0b0816')
+    x.fillStyle=bg; x.fillRect(0,0,180,180)
+    // red glow top-left
+    const rg=x.createRadialGradient(22,15,0,22,15,95)
+    rg.addColorStop(0,'rgba(255,72,90,0.58)'); rg.addColorStop(1,'rgba(255,72,90,0)')
+    x.fillStyle=rg; x.fillRect(0,0,180,180)
+    // blue glow top-right
+    const blg=x.createRadialGradient(158,18,0,158,18,88)
+    blg.addColorStop(0,'rgba(72,132,255,0.48)'); blg.addColorStop(1,'rgba(72,132,255,0)')
+    x.fillStyle=blg; x.fillRect(0,0,180,180)
+    // purple glow bottom
+    const pg=x.createRadialGradient(90,172,0,90,172,78)
+    pg.addColorStop(0,'rgba(155,80,255,0.38)'); pg.addColorStop(1,'rgba(155,80,255,0)')
+    x.fillStyle=pg; x.fillRect(0,0,180,180)
+    // subtle grid lines
+    x.save(); x.strokeStyle='rgba(255,255,255,0.07)'; x.lineWidth=1
+    for(let i=1;i<4;i++){x.beginPath();x.moveTo(10,45*i);x.lineTo(170,45*i);x.stroke()}
+    x.restore()
+    // trend line
+    const pts=[[18,145],[52,118],[84,128],[118,82],[158,50]]
+    x.save()
+    // fill under line
+    x.beginPath(); x.moveTo(pts[0][0],pts[0][1])
+    for(let i=1;i<pts.length;i++) x.lineTo(pts[i][0],pts[i][1])
+    x.lineTo(158,170); x.lineTo(18,170); x.closePath()
+    const fill=x.createLinearGradient(0,50,0,170)
+    fill.addColorStop(0,'rgba(255,100,90,0.22)'); fill.addColorStop(1,'rgba(255,100,90,0)')
+    x.fillStyle=fill; x.fill()
+    // line
+    x.beginPath(); x.moveTo(pts[0][0],pts[0][1])
+    for(let i=1;i<pts.length;i++) x.lineTo(pts[i][0],pts[i][1])
+    x.strokeStyle='rgba(255,118,108,0.85)'; x.lineWidth=3; x.lineJoin='round'; x.lineCap='round'; x.stroke()
+    // dots
+    pts.forEach(([px,py])=>{
+      x.beginPath(); x.arc(px,py,3.5,0,Math.PI*2)
+      x.fillStyle='rgba(255,140,130,0.95)'; x.fill()
+    })
+    x.restore()
+    // "報" character
+    x.font='bold 76px sans-serif'
+    x.fillStyle='rgba(255,255,255,0.90)'
+    x.textAlign='center'; x.textBaseline='middle'
+    x.fillText('報',90,108)
+    // set icon
+    document.getElementById('pwa-icon').href=c.toDataURL('image/png')
+  }catch(e){}
+})()
 </script>
 </body>
 </html>
