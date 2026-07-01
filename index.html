@@ -391,7 +391,7 @@ function trDel(id) { LS.trades = LS.trades.filter(t=>t.id!==id) }
 
 // STATE
 const TODAY = new Date()
-const S = { aid:null, year:TODAY.getFullYear(), month:TODAY.getMonth()+1, tab:'cal', selDate:null, fromDate:null, trendPeriod:'month', trendRange:'3M', trendRangeFrom:null, trendRangeTo:null }
+const S = { aid:null, year:TODAY.getFullYear(), month:TODAY.getMonth()+1, tab:'cal', selDate:null, fromDate:null, trendPeriod:'month', trendRange:'3M', trendRangeFrom:null, trendRangeTo:null, numFmt:'wan' }
 
 // HELPERS
 function nowISO() { return new Date().toISOString() }
@@ -400,6 +400,8 @@ function pad(n) { return String(n).padStart(2,'0') }
 function todayISO() { return dISO(TODAY) }
 function wan(v,dec=1) { return `${v>=0?'+':'−'}${(Math.abs(v)/10000).toFixed(dec)} 萬` }
 function usd(v) { return `${v>=0?'+':'−'}$${Math.abs(Math.round(v)).toLocaleString()}` }
+function fmt(v,dec=1) { return S.numFmt==='full'?(v>=0?'+':'−')+Math.abs(Math.round(v)).toLocaleString():wan(v,dec) }
+function toggleNumFmt() { S.numFmt=S.numFmt==='wan'?'full':'wan'; renderCal() }
 function dir(v) { return v>0?'up':v<0?'dn':'flat' }
 function monthEdges(y,m) {
   const s=`${y}-${pad(m)}-01`, last=new Date(y,m,0).getDate()
@@ -610,13 +612,28 @@ function renderCal() {
   const mPct=base>0?mTotal/base*100:0, mcls=dir(mTotal)
   const mhdrTitle=fromDate&&fromDate<s?`自 ${fromDate.slice(5).replace('-','/')} 累計`:`報酬日曆 ${y}/${pad(m)}`
 
+  // Realized / unrealized breakdown (reads full mpnl range, not just current month)
+  const pnlAccs=isUSDView?usdAccs:twdAccs
+  const mTotalRealized=pnlAccs.reduce((sum,a)=>{
+    const data=LS.mpnl[a.id]||{}
+    return sum+Object.entries(data).filter(([d])=>d>=fromOrMonthStart&&d<=e).reduce((s,[,v])=>s+(v.r||0),0)
+  },0)
+  const mTotalUnrealized=mTotal-mTotalRealized
+
   const usdPct=usdBase>0?mTotalUSD/usdBase*100:0
   const hasUSD=usdAccs.length>0&&!isUSDView  // show USD block only in aggregate or TWD view
 
   document.getElementById('mhdr').innerHTML=`
     <div>
-      <div class="mhdr-subtitle">${mhdrTitle}</div>
-      <div class="mhdr-big ${mcls}">${isUSDView?usd(mTotal):wan(mTotal,0)}</div>
+      <div class="mhdr-subtitle" style="display:flex;align-items:center;gap:6px">
+        ${mhdrTitle}
+        <button onclick="toggleNumFmt();event.stopPropagation()" style="font-size:9px;padding:1px 6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#8a9098;cursor:pointer;font-weight:600">${S.numFmt==='wan'?'萬':'#'}</button>
+      </div>
+      <div class="mhdr-big ${mcls}">${isUSDView?usd(mTotal):fmt(mTotal,0)}</div>
+      ${!isUSDView&&mTotal!==0?`<div style="display:flex;gap:10px;margin-top:3px">
+        <span style="font-size:11px;color:#8a9098">已 <span class="${dir(mTotalRealized)}" style="font-weight:600">${fmt(mTotalRealized,0)}</span></span>
+        <span style="font-size:11px;color:#8a9098">未 <span class="${dir(mTotalUnrealized)}" style="font-weight:600">${fmt(mTotalUnrealized,0)}</span></span>
+      </div>`:''}
     </div>
     <div>
       <div class="mhdr-subtitle">本金${isAgg?'（合計）':''}</div>
