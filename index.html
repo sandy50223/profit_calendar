@@ -699,7 +699,7 @@ function renderCal() {
       hasData=true; wSum+=tv; wR+=(dayRealizedMap[iso]||0)
       const pct=base>0?tv/base*100:0, cl=dir(tv), celCls=tv>0?'up':tv<0?'dn':'flat'
       const r=dayRealizedMap[iso]||0
-      const bkHtml=r!==0?`<div class="bkd">實${isUSDView?usd(r):wan(r,0)}</div>`:''
+      const bkHtml=`<div class="bkd">實${isUSDView?usd(r):wan(r,0)}</div>`
       const note=dayNoteMap[iso]||''
       const noteHtml=buildNoteHtml(note)
       const noteEsc=note?note.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''
@@ -712,7 +712,7 @@ function renderCal() {
       inner+=`<div class="cc wk flat"><div class="dn-num">${wi+1}</div></div>`
     } else {
       const wpct=base>0?wSum/base*100:0, cl=dir(wSum), celCls=wSum>0?'up':wSum<0?'dn':'flat'
-      const wbkd=wR!==0?`<div class="bkd">實${isUSDView?usd(wR):wan(wR,0)}</div>`:''
+      const wbkd=`<div class="bkd">實${isUSDView?usd(wR):wan(wR,0)}</div>`
       inner+=`<div class="cc wk ${celCls}">
         <div class="dn-num">${wi+1}</div>
         <div><div class="pnl ${cl}">${isUSDView?usd(wSum):wan(wSum,0)}</div>${wbkd}<div class="pct ${cl}">${wpct>=0?'+':''}${wpct.toFixed(1)}%</div></div>
@@ -1296,7 +1296,7 @@ function joinRoom() {
     if(!snap.exists()){ msg.textContent='找不到此帳本，請確認代碼'; return }
     document.getElementById('roomGate').style.display='none'
     startRoom(code)
-  })
+  }).catch(err=>{ msg.textContent='連線失敗，請稍後再試'; console.error(err) })
 }
 function startRoom(code) {
   FB_ROOM=code
