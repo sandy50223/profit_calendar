@@ -35,11 +35,11 @@ body{font-family:'Inter',system-ui,sans-serif;background:radial-gradient(at 8% 6
 .cc.sel{outline:2px solid rgba(255,122,114,.7);outline-offset:-2px}
 .dn-num{font-size:20px;font-weight:700;text-align:right;opacity:.7;line-height:1}
 .cc.up .dn-num{color:#ffc8c0}.cc.dn .dn-num{color:#b6f0c8}.cc.flat .dn-num{color:#9aa0a6}.cc.wk .dn-num{color:#a8acb3;font-size:18px}
-.pnl{font-size:17px;font-weight:700;line-height:1.05;font-feature-settings:"tnum" 1}
+.pnl{font-size:17px;font-weight:700;line-height:1.05;font-feature-settings:"tnum" 1;white-space:nowrap}
 .pnl.up{color:#ff7a72}.pnl.dn{color:#5fe39a}
-.pct{font-size:12px;font-weight:600;opacity:.9;font-feature-settings:"tnum" 1}
+.pct{font-size:12px;font-weight:600;opacity:.9;font-feature-settings:"tnum" 1;white-space:nowrap}
 .pct.up{color:#ff7a72}.pct.dn{color:#5fe39a}
-.bkd{font-size:10px;font-weight:600;opacity:.7;margin-top:1px;font-feature-settings:"tnum" 1}
+.bkd{font-size:10px;font-weight:600;opacity:.7;margin-top:1px;font-feature-settings:"tnum" 1;white-space:nowrap}
 /* Month header */
 .mhdr{display:grid;grid-template-columns:2fr 1fr 1.6fr;gap:14px;margin-bottom:22px;align-items:start}
 .mhdr-subtitle{color:#a8acb3;font-size:13px;margin-bottom:3px}
@@ -118,8 +118,8 @@ details.gd .dc{padding:0 14px 14px}
   .mhdr-subtitle{font-size:12px}
   .cal-header,.cal-week{gap:3px;margin-bottom:3px}
   .ch-cell{font-size:10px;padding:4px 0}
-  .cc{height:68px;padding:5px 6px 7px;border-radius:10px}
-  .pnl{font-size:12px}
+  .cc{height:68px;padding:5px 4px 7px;border-radius:10px}
+  .pnl{font-size:11px}
   .pct{font-size:10px}
   .bkd{font-size:9px;margin-top:0}
   .dn-num{font-size:13px}
@@ -398,7 +398,7 @@ function nowISO() { return new Date().toISOString() }
 function dISO(dt) { return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}` }
 function pad(n) { return String(n).padStart(2,'0') }
 function todayISO() { return dISO(TODAY) }
-function wan(v,dec=1) { return `${v>=0?'+':'−'}${(Math.abs(v)/10000).toFixed(dec)} 萬` }
+function wan(v,dec=1) { return `${v>=0?'+':'−'}${(Math.abs(v)/10000).toFixed(dec)}萬` }
 function usd(v) { return `${v>=0?'+':'−'}$${Math.abs(Math.round(v)).toLocaleString()}` }
 function fmt(v,dec=1) { return S.numFmt==='full'?(v>=0?'+':'−')+Math.abs(Math.round(v)).toLocaleString():wan(v,dec) }
 function toggleNumFmt() { S.numFmt=S.numFmt==='wan'?'full':'wan'; renderCal() }
