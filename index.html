@@ -457,17 +457,30 @@ function buildSnapByDay(aid,s,e){
   const out={}
   if(aid){
     const acc=LS.accs.find(a=>a.id===aid)||{}
-    const sd=acc.startDate||s
+    const sd=acc.startDate&&acc.startDate>s?acc.startDate:s
     const src=LS.snap[aid]||{}
     Object.entries(src).filter(([d])=>d>=sd&&d<=e).forEach(([d,v])=>{ const t=(v.pv||0)+(v.bk||0); if(t!==0) out[d]=t })
   } else {
     LS.accs.forEach(a=>{
-      const sd=a.startDate||s
+      const sd=a.startDate&&a.startDate>s?a.startDate:s
       const src=LS.snap[a.id]||{}
       Object.entries(src).filter(([d])=>d>=sd&&d<=e).forEach(([d,v])=>{ const t=(v.pv||0)+(v.bk||0); if(t!==0) out[d]=(out[d]||0)+t })
     })
   }
   return out
+}
+function latestSnapTotal(aid){
+  const src=LS.snap[aid]||{}
+  const dates=Object.keys(src).sort()
+  if(!dates.length) return null
+  const v=src[dates[dates.length-1]]
+  const t=(v.pv||0)+(v.bk||0)
+  return t!==0?t:null
+}
+function currentAccsValue(accsList){
+  let any=false, sum=0
+  accsList.forEach(a=>{ const t=latestSnapTotal(a.id); if(t!=null){ any=true; sum+=t } })
+  return any?sum:null
 }
 function prevBizSnap(aid,targetDate,snapByDay){
   const inMonth=Object.keys(snapByDay).filter(d=>d<targetDate).sort()
@@ -622,6 +635,8 @@ function renderCal() {
 
   const usdPct=usdBase>0?mTotalUSD/usdBase*100:0
   const hasUSD=usdAccs.length>0&&!isUSDView  // show USD block only in aggregate or TWD view
+  const curVal=currentAccsValue(isUSDView?usdAccs:twdAccs)
+  const curValUSD=currentAccsValue(usdAccs)
 
   document.getElementById('mhdr').innerHTML=`
     <div>
@@ -643,6 +658,7 @@ function renderCal() {
            <div class="mhdr-big na" style="font-size:26px">${Math.round(base/10000)} 萬</div>
            <button class="btn btn-sm" onclick="editCap()">✏️</button>
          </div>`}
+      <div style="font-size:11px;color:#8a9098;margin-top:3px">目前 ${curVal!=null?(isUSDView?`$${Math.round(curVal/1000).toLocaleString()}K`:`${Math.round(curVal/10000).toLocaleString()} 萬`):'—'}</div>
     </div>
     <div>
       <div style="margin-bottom:4px">
@@ -671,6 +687,7 @@ function renderCal() {
       <div>
         <div class="mhdr-subtitle" style="color:#89ddff">本金（USD）</div>
         <div class="mhdr-big na" style="font-size:22px">$${Math.round(usdBase/1000).toLocaleString()}K</div>
+        <div style="font-size:11px;color:#8a9098;margin-top:3px">目前 ${curValUSD!=null?`$${Math.round(curValUSD/1000).toLocaleString()}K`:'—'}</div>
       </div>
       <div>
         <div class="mhdr-subtitle" style="color:#89ddff">美股報酬率</div>
@@ -1032,6 +1049,32 @@ function goTab(t){
   else renderCal()
   closeSidebarIfMobile()
 }
+
+// SWIPE — 手機左右滑動切換月份（僅在報酬日曆分頁生效）
+function changeMonth(delta){
+  let m=S.month+delta, y=S.year
+  if(m<1){ m=12; y-- } else if(m>12){ m=1; y++ }
+  S.year=y; S.month=m; S.fromDate=null
+  const sbY=document.getElementById('sbYear'); if(sbY) sbY.value=y
+  const sbM=document.getElementById('sbMonth'); if(sbM) sbM.value=m
+  renderCal()
+}
+;(function initSwipeNav(){
+  let sx=0, sy=0, active=false
+  document.addEventListener('touchstart',e=>{
+    if(S.tab!=='cal') return
+    if(document.getElementById('dayModal').style.display==='flex') return
+    const t=e.touches[0]
+    sx=t.clientX; sy=t.clientY; active=true
+  },{passive:true})
+  document.addEventListener('touchend',e=>{
+    if(!active) return
+    active=false
+    const t=e.changedTouches[0]
+    const dx=t.clientX-sx, dy=t.clientY-sy
+    if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5) changeMonth(dx<0?1:-1)
+  },{passive:true})
+})()
 function buildNoteHtml(note) {
   if (!note) return ''
   const esc = note.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
