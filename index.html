@@ -235,6 +235,19 @@ details.gd .dc{padding:0 14px 14px}
       <div id="trendChart" style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:14px 10px 8px;margin-bottom:14px"></div>
       <div id="trendTable" style="margin-top:14px"></div>
     </div>
+    <div class="card">
+      <h4>📈 個股損益</h4>
+      <p class="caption" style="margin-bottom:10px">只統計在日曆「分股票」模式下有輸入代碼的紀錄。</p>
+      <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;color:#a8acb3">從</span>
+        <input type="date" id="sp-from" style="background:#f3f4f7;border:1px solid rgba(255,255,255,.15);border-radius:7px;padding:3px 8px;font-size:12px;color:#1a1a1a;font-weight:600;outline:none" onchange="renderStockPnl()">
+        <span style="font-size:12px;color:#a8acb3">至</span>
+        <input type="date" id="sp-to" style="background:#f3f4f7;border:1px solid rgba(255,255,255,.15);border-radius:7px;padding:3px 8px;font-size:12px;color:#1a1a1a;font-weight:600;outline:none" onchange="renderStockPnl()">
+        <button class="btn btn-sm" onclick="setStockRange('month')">本月</button>
+        <button class="btn btn-sm" onclick="setStockRange('all')">全部</button>
+      </div>
+      <div id="stockPnlTable"></div>
+    </div>
   </div>
 
 </main>
@@ -331,10 +344,10 @@ function ensureDefault() {
 }
 
 // Manual PNL
-function mpnlSet(aid, d, r, u, note) {
+function mpnlSet(aid, d, r, u, note, stocks) {
   const data = LS.mpnl
   if (!data[aid]) data[aid] = {}
-  data[aid][d] = {r, u, note}
+  data[aid][d] = stocks && stocks.length ? {r, u, note, stocks} : {r, u, note}
   LS.mpnl = data
 }
 function mpnlGet(aid, d) { return (LS.mpnl[aid]||{})[d]||null }
@@ -371,6 +384,11 @@ function snapGet(aid, d) { return (LS.snap[aid]||{})[d]||null }
 function snapDel(aid, d) {
   const data = LS.snap
   if (data[aid]) { delete data[aid][d]; LS.snap = data }
+}
+function snapPrevBefore(aid, beforeDate) {
+  const src=LS.snap[aid]||{}
+  const dates=Object.keys(src).filter(d=>d<beforeDate).sort()
+  return dates.length?src[dates[dates.length-1]]:null
 }
 
 // Capital changes
@@ -749,10 +767,93 @@ function selDay(iso){
 }
 
 // DAY EDIT MODAL
+let modalStockMode={}
+function stockRowHtml(aid, s){
+  const codeEsc=(s.code||'').replace(/"/g,'&quot;')
+  return `<div class="form-row" data-stock-row style="margin-top:6px;align-items:flex-end">
+    <div class="fg" style="max-width:120px"><label>股票</label><input type="text" class="stock-code" value="${codeEsc}" placeholder="代碼或名稱"></div>
+    <div class="fg"><label>損益（萬）</label><input type="number" class="stock-amt" value="${((s.amt||0)/10000).toFixed(1)}" step="0.1" oninput="updateStockTotal(${aid})"></div>
+    <button type="button" class="btn btn-sm btn-d" onclick="this.closest('[data-stock-row]').remove();updateStockTotal(${aid})">🗑</button>
+  </div>`
+}
+function accBlockHtml(a, iso, overrides){
+  overrides=overrides||{}
+  const v=mpnlGet(a.id,iso)||{}
+  const sn=snapGet(a.id,iso)||{}
+  const mode=!!modalStockMode[a.id]
+  const pv=overrides.pv!=null?overrides.pv:(sn.pv!=null?(sn.pv/10000).toFixed(1):'0.0')
+  const bk=overrides.bk!=null?overrides.bk:(sn.bk!=null?(sn.bk/10000).toFixed(1):'0.0')
+  const r=((overrides.r!=null?overrides.r:(v.r||0))/10000).toFixed(1)
+  let stocksHtml='', totalWan='0.0'
+  if(mode){
+    const stocks=overrides.stocks!==undefined?overrides.stocks:(v.stocks||[])
+    totalWan=(stocks.reduce((s,x)=>s+(x.amt||0),0)/10000).toFixed(1)
+    stocksHtml=stocks.map(s=>stockRowHtml(a.id,s)).join('')
+  }
+  return `<div class="modal-acc" id="accblock_${a.id}">
+    <div class="modal-acc-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>📁 ${a.name}</span>
+      <div style="display:flex;gap:6px">
+        <button type="button" class="btn btn-sm" onclick="toggleStockMode(${a.id},'${iso}')" style="font-size:10px;padding:3px 8px;text-transform:none;letter-spacing:0;font-weight:500">${mode?'🔢 單一數字':'🔀 分股票'}</button>
+        <button type="button" class="btn btn-sm" onclick="copyPrevSnap(${a.id},'${iso}')" title="複製上一次填寫的帳戶淨值/銀行餘額（不限前一日）" style="font-size:10px;padding:3px 8px;text-transform:none;letter-spacing:0;font-weight:500">📋 複製上次</button>
+      </div>
+    </div>
+    <div class="form-row">
+      ${mode?'':`<div class="fg"><label>已實現損益（萬）</label><input type="number" id="mr_${a.id}" value="${r}" step="0.1"></div>`}
+      <div class="fg"><label>帳戶淨值（萬）</label><input type="number" id="mpv_${a.id}" value="${pv}" step="0.1"></div>
+      <div class="fg"><label>銀行餘額（萬）</label><input type="number" id="mbk_${a.id}" value="${bk}" step="0.1"></div>
+    </div>
+    ${mode?`<div id="stockRows_${a.id}">${stocksHtml}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+      <button type="button" class="btn btn-sm" onclick="addStockRow(${a.id})">+ 新增股票</button>
+      <span style="font-size:11px;color:#8a9098">合計：<span id="stockTotal_${a.id}">${totalWan}</span> 萬</span>
+    </div>`:''}
+  </div>`
+}
+function addStockRow(aid){
+  const wrap=document.getElementById(`stockRows_${aid}`); if(!wrap) return
+  const div=document.createElement('div')
+  div.innerHTML=stockRowHtml(aid,{code:'',amt:0})
+  wrap.appendChild(div.firstElementChild)
+}
+function updateStockTotal(aid){
+  const wrap=document.getElementById(`stockRows_${aid}`); if(!wrap) return
+  let total=0
+  wrap.querySelectorAll('[data-stock-row]').forEach(row=>{ total+=parseFloat(row.querySelector('.stock-amt').value||0) })
+  const el=document.getElementById(`stockTotal_${aid}`); if(el) el.textContent=total.toFixed(1)
+}
+function readStockRows(aid){
+  const wrap=document.getElementById(`stockRows_${aid}`); if(!wrap) return []
+  const out=[]
+  wrap.querySelectorAll('[data-stock-row]').forEach(row=>{
+    const code=row.querySelector('.stock-code').value.trim()
+    const amt=parseFloat(row.querySelector('.stock-amt').value||0)*10000
+    if(code||amt) out.push({code, amt})
+  })
+  return out
+}
+function toggleStockMode(aid, iso){
+  const pvEl=document.getElementById(`mpv_${aid}`), bkEl=document.getElementById(`mbk_${aid}`)
+  const overrides={ pv: pvEl?pvEl.value:null, bk: bkEl?bkEl.value:null }
+  const switchingToStock=!modalStockMode[aid]
+  if(switchingToStock){
+    const rEl=document.getElementById(`mr_${aid}`)
+    const seed=rEl?parseFloat(rEl.value||0)*10000:0
+    overrides.stocks=seed?[{code:'',amt:seed}]:[]
+  } else {
+    overrides.r=readStockRows(aid).reduce((s,x)=>s+(x.amt||0),0)
+  }
+  modalStockMode[aid]=switchingToStock
+  const a=LS.accs.find(x=>x.id===aid); if(!a) return
+  document.getElementById(`accblock_${aid}`).outerHTML=accBlockHtml(a, iso, overrides)
+}
+
 function openDayModal(iso){
   const accs=LS.accs
   if(!accs.length) return
   document.getElementById('modalTitle').textContent=`📅 ${iso}`
+  modalStockMode={}
+  accs.forEach(a=>{ const v=mpnlGet(a.id,iso)||{}; modalStockMode[a.id]=!!(v.stocks&&v.stocks.length) })
 
   // Summary bar
   const totR=accs.reduce((sum,a)=>sum+((mpnlGet(a.id,iso)||{}).r||0),0)
@@ -761,24 +862,7 @@ function openDayModal(iso){
         當日已實現合計：<strong style="color:${totR>=0?'#ff7a72':'#5fe39a'}">${wan(totR)}</strong>
       </div>` : ''
 
-  // Per-account fields
-  let h=''
-  accs.forEach(a=>{
-    const v=mpnlGet(a.id,iso)||{}
-    const sn=snapGet(a.id,iso)||{}
-    const r=((v.r||0)/10000).toFixed(1)
-    const pv=(sn.pv!=null?sn.pv/10000:0).toFixed(1)
-    const bk=(sn.bk!=null?sn.bk/10000:0).toFixed(1)
-    h+=`<div class="modal-acc">
-      <div class="modal-acc-title">📁 ${a.name}</div>
-      <div class="form-row">
-        <div class="fg"><label>已實現損益（萬）</label><input type="number" id="mr_${a.id}" value="${r}" step="0.1"></div>
-        <div class="fg"><label>帳戶淨值（萬）</label><input type="number" id="mpv_${a.id}" value="${pv}" step="0.1"></div>
-        <div class="fg"><label>銀行餘額（萬）</label><input type="number" id="mbk_${a.id}" value="${bk}" step="0.1"></div>
-      </div>
-    </div>`
-  })
-  document.getElementById('modalBody').innerHTML=h
+  document.getElementById('modalBody').innerHTML=accs.map(a=>accBlockHtml(a, iso)).join('')
 
   // Note from first account
   const note=(mpnlGet(accs[0].id,iso)||{}).note||''
@@ -786,6 +870,14 @@ function openDayModal(iso){
 
   document.getElementById('dayModal').style.display='flex'
   setTimeout(()=>document.getElementById(`mr_${accs[0].id}`)?.focus(),60)
+}
+
+function copyPrevSnap(aid, iso){
+  const prev=snapPrevBefore(aid, iso)
+  if(!prev){ alert('沒有更早的紀錄可複製'); return }
+  const pvEl=document.getElementById(`mpv_${aid}`), bkEl=document.getElementById(`mbk_${aid}`)
+  if(pvEl) pvEl.value=((prev.pv||0)/10000).toFixed(1)
+  if(bkEl) bkEl.value=((prev.bk||0)/10000).toFixed(1)
 }
 
 function closeModal(){
@@ -798,10 +890,16 @@ function saveModal(){
   const iso=S.selDate; if(!iso) return
   const note=document.getElementById('m_note')?.value||''
   LS.accs.forEach(a=>{
-    const r=parseFloat(document.getElementById(`mr_${a.id}`)?.value||0)
     const pv=parseFloat(document.getElementById(`mpv_${a.id}`)?.value||0)
     const bk=parseFloat(document.getElementById(`mbk_${a.id}`)?.value||0)
-    mpnlSet(a.id,iso,r*10000,0,note)
+    if(modalStockMode[a.id]){
+      const stocks=readStockRows(a.id)
+      const r=stocks.reduce((s,x)=>s+(x.amt||0),0)
+      mpnlSet(a.id,iso,r,0,note,stocks)
+    } else {
+      const r=parseFloat(document.getElementById(`mr_${a.id}`)?.value||0)
+      mpnlSet(a.id,iso,r*10000,0,note)
+    }
     if(pv!==0||bk!==0) snapSet(a.id,iso,pv*10000,bk*10000,note)
   })
   closeModal()
@@ -1045,7 +1143,7 @@ function goTab(t){
   document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'))
   document.getElementById('tab-'+t).classList.add('active')
   if(t==='set') renderSettings()
-  else if(t==='trend') renderTrend()
+  else if(t==='trend'){ renderTrend(); renderStockPnl() }
   else renderCal()
   closeSidebarIfMobile()
 }
@@ -1127,7 +1225,7 @@ function closeSidebarIfMobile(){
   }
 }
 function showMsg(el,text,type){ el.className=`alert ${type}`; el.textContent=text; el.style.display='block'; setTimeout(()=>el.style.display='none',3000) }
-function render(){ initSidebar(); if(S.tab==='cal') renderCal(); else if(S.tab==='trend') renderTrend(); else renderSettings() }
+function render(){ initSidebar(); if(S.tab==='cal') renderCal(); else if(S.tab==='trend'){ renderTrend(); renderStockPnl() } else renderSettings() }
 
 // Keyboard: Esc=close, ←/→=prev/next date (when not in input)
 document.addEventListener('keydown',e=>{
@@ -1317,6 +1415,57 @@ function renderTrend(){
     row+=`</tr>`; th+=row
   })
   tbl.innerHTML=th+'</tbody></table>'
+}
+
+// STOCK-LEVEL PNL（分股票輸入的加總）
+let spInitialized=false
+function computeStockTotals(aid, from, to){
+  const accsList=aid?[LS.accs.find(a=>a.id===aid)].filter(Boolean):LS.accs
+  const totals={}
+  accsList.forEach(a=>{
+    const data=LS.mpnl[a.id]||{}
+    Object.entries(data).forEach(([d,v])=>{
+      if(from&&d<from) return
+      if(to&&d>to) return
+      if(v.stocks&&v.stocks.length){
+        v.stocks.forEach(s=>{
+          const key=(s.code||'').trim()||'未分類'
+          totals[key]=(totals[key]||0)+(s.amt||0)
+        })
+      }
+    })
+  })
+  return totals
+}
+function setStockRange(kind){
+  const fromEl=document.getElementById('sp-from'), toEl=document.getElementById('sp-to')
+  if(!fromEl||!toEl) return
+  if(kind==='month'){ fromEl.value=`${S.year}-${pad(S.month)}-01`; toEl.value=todayISO() }
+  else { fromEl.value=''; toEl.value='' }
+  spInitialized=true
+  renderStockPnl()
+}
+function renderStockPnl(){
+  const fromEl=document.getElementById('sp-from'), toEl=document.getElementById('sp-to')
+  const el=document.getElementById('stockPnlTable')
+  if(!fromEl||!toEl||!el) return
+  if(!spInitialized){
+    fromEl.value=`${S.year}-${pad(S.month)}-01`
+    toEl.value=todayISO()
+    spInitialized=true
+  }
+  const totals=computeStockTotals(S.aid, fromEl.value||null, toEl.value||null)
+  const keys=Object.keys(totals)
+  if(!keys.length){ el.innerHTML='<p class="caption">此區間沒有分股票輸入的損益紀錄。</p>'; return }
+  keys.sort((a,b)=>Math.abs(totals[b])-Math.abs(totals[a]))
+  const total=keys.reduce((s,k)=>s+totals[k],0)
+  let h=`<table class="dt"><thead><tr><th>股票</th><th>損益（萬）</th></tr></thead><tbody>`
+  keys.forEach(k=>{
+    const v=totals[k]
+    h+=`<tr><td>${k}</td><td style="color:${v>=0?'#ff7a72':'#5fe39a'}">${wan(v)}</td></tr>`
+  })
+  h+=`<tr style="font-weight:700"><td>合計</td><td style="color:${total>=0?'#ff7a72':'#5fe39a'}">${wan(total)}</td></tr>`
+  el.innerHTML=h+'</tbody></table>'
 }
 
 // ROOM FUNCTIONS
