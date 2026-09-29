@@ -312,6 +312,12 @@ function fbWrite(key, val) {
   if (!FB_ROOM) return
   fbDb.ref(`rooms/${FB_ROOM}/${key}`).set(val)
 }
+// 只覆寫單一節點（例如某帳戶某天），不動同一層的其他日期/帳戶——
+// 避免某台裝置本機資料是舊的時，存檔時把整包 mpnl/snap 蓋掉別台裝置新增的資料。
+function fbWritePath(path, val) {
+  if (!FB_ROOM) return
+  fbDb.ref(`rooms/${FB_ROOM}/${path}`).set(val===undefined?null:val)
+}
 // Firebase converts integer-keyed objects (e.g. {1:{...}}) to arrays ([null,{...}]).
 // normFbObj restores them to proper objects.
 function normFbObj(v) {
@@ -347,13 +353,17 @@ function ensureDefault() {
 function mpnlSet(aid, d, r, u, note, stocks) {
   const data = LS.mpnl
   if (!data[aid]) data[aid] = {}
-  data[aid][d] = stocks && stocks.length ? {r, u, note, stocks} : {r, u, note}
-  LS.mpnl = data
+  const entry = stocks && stocks.length ? {r, u, note, stocks} : {r, u, note}
+  data[aid][d] = entry
+  localStorage.setItem('pnl_mpnl', JSON.stringify(data))
+  fbWritePath(`mpnl/${aid}/${d}`, entry)
 }
 function mpnlGet(aid, d) { return (LS.mpnl[aid]||{})[d]||null }
 function mpnlDel(aid, d) {
   const data = LS.mpnl
-  if (data[aid]) { delete data[aid][d]; LS.mpnl = data }
+  if (data[aid]) delete data[aid][d]
+  localStorage.setItem('pnl_mpnl', JSON.stringify(data))
+  fbWritePath(`mpnl/${aid}/${d}`, null)
 }
 function mpnlMonth(aid, ys, ye) {
   if (aid) {
@@ -377,13 +387,17 @@ function mpnlMonth(aid, ys, ye) {
 function snapSet(aid, d, pv, bk, note) {
   const data = LS.snap
   if (!data[aid]) data[aid] = {}
-  data[aid][d] = {pv, bk, note}
-  LS.snap = data
+  const entry = {pv, bk, note}
+  data[aid][d] = entry
+  localStorage.setItem('pnl_snap', JSON.stringify(data))
+  fbWritePath(`snap/${aid}/${d}`, entry)
 }
 function snapGet(aid, d) { return (LS.snap[aid]||{})[d]||null }
 function snapDel(aid, d) {
   const data = LS.snap
-  if (data[aid]) { delete data[aid][d]; LS.snap = data }
+  if (data[aid]) delete data[aid][d]
+  localStorage.setItem('pnl_snap', JSON.stringify(data))
+  fbWritePath(`snap/${aid}/${d}`, null)
 }
 function snapPrevBefore(aid, beforeDate) {
   const src=LS.snap[aid]||{}
