@@ -212,6 +212,11 @@ details.gd .dc{padding:0 14px 14px}
       </div>
       <p class="caption" style="margin-top:8px">資料儲存於瀏覽器 localStorage。匯出 JSON 以備份或跨瀏覽器移轉。</p>
     </div>
+    <div class="card">
+      <h4>🛟 自動備份</h4>
+      <p class="caption" style="margin-bottom:10px">每天第一次打開 App、同步成功時，會自動把當下完整資料存一份快照到雲端獨立位置，不會被平常存檔動到。如果資料被覆蓋或誤刪，可以從下面選一天還原。</p>
+      <div id="backupList"></div>
+    </div>
   </div>
 
   <!-- TAB: Trend -->
@@ -981,7 +986,19 @@ function renderDetail(dayTotal,manual){
 }
 
 // SETTINGS
+function renderBackupList(){
+  const el=document.getElementById('backupList')
+  if(!el) return
+  if(!FB_ROOM){ el.innerHTML='<p class="caption">尚未連接帳本。</p>'; return }
+  listBackups(dates=>{
+    if(!dates.length){ el.innerHTML='<p class="caption">尚無備份紀錄（明天打開 App 時會自動產生第一份）。</p>'; return }
+    el.innerHTML=`<table class="dt"><thead><tr><th>備份日期</th><th></th></tr></thead><tbody>`+
+      dates.slice(0,90).map(d=>`<tr><td>${d}</td><td><button class="btn btn-d btn-sm" onclick="restoreBackup('${d}')">還原這份</button></td></tr>`).join('')+
+      `</tbody></table>`
+  })
+}
 function renderSettings(){
+  renderBackupList()
   const accs=LS.accs
   document.getElementById('accList').innerHTML=accs.map(a=>{
     const cur=a.currency||'TWD'
@@ -1525,6 +1542,7 @@ function startRoom(code) {
     if(d.trades!==undefined) localStorage.setItem('pnl_tr',   JSON.stringify(toArr(d.trades)))
     if(d.pins  !==undefined) localStorage.setItem('pnl_pins', JSON.stringify(toArr(d.pins)))
     ensureDefault()
+    maybeAutoBackup()
     // Don't re-render while user has the day modal open — data is already in localStorage
     if(document.getElementById('dayModal').style.display==='none') render()
   })
@@ -1532,6 +1550,42 @@ function startRoom(code) {
 function pushLocalToFirebase() {
   if(!FB_ROOM) return
   fbDb.ref(`rooms/${FB_ROOM}`).set({accs:LS.accs,mpnl:LS.mpnl,snap:LS.snap,cc:LS.cc,trades:LS.trades,pins:LS.pins})
+}
+
+// AUTO BACKUP — 每天第一次同步成功時，把當下資料存一份快照到 rooms/{code}/_backups/{date}
+// 跟平常在用的 accs/mpnl/snap/... 完全獨立的節點，不會被日常存檔動到，也不佔用太多空間（純文字 JSON）。
+function maybeAutoBackup(){
+  if(!FB_ROOM) return
+  const today=todayISO()
+  const flagKey='pnl_last_backup_'+FB_ROOM
+  if(localStorage.getItem(flagKey)===today) return
+  const snapshot={accs:LS.accs, mpnl:LS.mpnl, snap:LS.snap, cc:LS.cc, trades:LS.trades, pins:LS.pins, ts:nowISO()}
+  fbDb.ref(`rooms/${FB_ROOM}/_backups/${today}`).set(snapshot)
+    .then(()=>localStorage.setItem(flagKey, today))
+    .catch(err=>console.error('自動備份失敗', err))
+}
+function listBackups(cb){
+  if(!FB_ROOM){ cb([]); return }
+  fbDb.ref(`rooms/${FB_ROOM}/_backups`).once('value', snap=>{
+    const d=snap.val()||{}
+    cb(Object.keys(d).sort().reverse())
+  })
+}
+function restoreBackup(date){
+  if(!FB_ROOM) return
+  if(!confirm(`確定要還原到 ${date} 的備份嗎？這會覆蓋掉目前所有資料，且無法復原！`)) return
+  fbDb.ref(`rooms/${FB_ROOM}/_backups/${date}`).once('value', snap=>{
+    const b=snap.val()
+    if(!b){ alert('找不到這份備份'); return }
+    LS.accs=b.accs||[]
+    LS.mpnl=b.mpnl||{}
+    LS.snap=b.snap||{}
+    LS.cc=b.cc||[]
+    LS.trades=b.trades||[]
+    LS.pins=b.pins||[]
+    alert('已還原 '+date+' 的備份')
+    render()
+  })
 }
 function updateRoomUI() {
   const el=document.getElementById('sbRoom')
