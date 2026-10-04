@@ -1559,10 +1559,12 @@ function maybeAutoBackup(){
   const today=todayISO()
   const flagKey='pnl_last_backup_'+FB_ROOM
   if(localStorage.getItem(flagKey)===today) return
+  // 先同步標記「今天已備份」，避免這個寫入觸發 rooms/{code} 的 on('value') 監聽器
+  // 又重新呼叫一次 maybeAutoBackup，形成寫入→觸發監聽→又寫入的無限迴圈。
+  localStorage.setItem(flagKey, today)
   const snapshot={accs:LS.accs, mpnl:LS.mpnl, snap:LS.snap, cc:LS.cc, trades:LS.trades, pins:LS.pins, ts:nowISO()}
   fbDb.ref(`rooms/${FB_ROOM}/_backups/${today}`).set(snapshot)
-    .then(()=>localStorage.setItem(flagKey, today))
-    .catch(err=>console.error('自動備份失敗', err))
+    .catch(err=>{ console.error('自動備份失敗', err); localStorage.removeItem(flagKey) })
 }
 function listBackups(cb){
   if(!FB_ROOM){ cb([]); return }
