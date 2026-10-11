@@ -45,6 +45,22 @@ body{font-family:'Inter',system-ui,sans-serif;background:radial-gradient(at 8% 6
 .mhdr-subtitle{color:#a8acb3;font-size:13px;margin-bottom:3px}
 .mhdr-big{font-size:38px;font-weight:700;font-family:'Manrope',sans-serif;letter-spacing:-1.5px;font-feature-settings:"tnum" 1}
 .mhdr-big.up{color:#ff7a72}.mhdr-big.dn{color:#5fe39a}.mhdr-big.na{color:#a8acb3}
+/* Cash gauge — 現金水位計，水位越低（現金越少）顏色越趨向示警紅 */
+.cash-gauge-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
+.cash-gauge{position:relative;width:34px;height:16px;flex-shrink:0;border-radius:3px;border:1.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.04);overflow:visible}
+.cash-gauge-nub{position:absolute;top:50%;right:-4px;transform:translateY(-50%);width:3px;height:8px;border-radius:0 2px 2px 0;background:rgba(255,255,255,.3)}
+.cash-gauge-fill{position:absolute;top:1px;bottom:1px;left:1px;border-radius:2px;min-width:2px;transition:width .5s ease,background .3s ease;z-index:1}
+.cash-gauge.lvl-ok .cash-gauge-fill{background:linear-gradient(90deg,#3a9fe0,#8fe0ff)}
+.cash-gauge.lvl-low .cash-gauge-fill{background:linear-gradient(90deg,#e0932f,#ffcb6b)}
+.cash-gauge.lvl-crit .cash-gauge-fill{background:linear-gradient(90deg,#e23b3b,#ff9a9a)}
+.cash-gauge.lvl-crit{border-color:rgba(255,80,80,.7);animation:cashPulse 1.4s ease-in-out infinite}
+.cash-gauge.lvl-crit .cash-gauge-nub{background:rgba(255,80,80,.7)}
+@keyframes cashPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,80,80,.45)}50%{box-shadow:0 0 0 4px rgba(255,80,80,0)}}
+.cash-warn{position:absolute;top:-11px;right:-3px;font-size:11px;z-index:3}
+.cash-gauge-pct{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:8px;font-weight:700;color:#fff;z-index:2;text-shadow:0 1px 2px rgba(0,0,0,.7);font-feature-settings:"tnum" 1;pointer-events:none}
+.cash-gauge-label{font-size:9px;font-weight:600;color:#8a9098;white-space:nowrap;font-feature-settings:"tnum" 1}
+.cash-gauge-label.lvl-low{color:#ffb648}
+.cash-gauge-label.lvl-crit{color:#ff7a7a;font-weight:700}
 /* Cards */
 .card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;margin-bottom:14px}
 .card h4{font-family:'Manrope',sans-serif;font-weight:700;font-size:15px;margin-bottom:14px;color:#f0f0f3}
@@ -519,6 +535,37 @@ function currentAccsValue(accsList){
   accsList.forEach(a=>{ const t=latestSnapTotal(a.id); if(t!=null){ any=true; sum+=t } })
   return any?sum:null
 }
+function currentStockCashSplit(accsList){
+  let pv=0, bk=0, any=false
+  accsList.forEach(a=>{
+    const src=LS.snap[a.id]||{}
+    const dates=Object.keys(src).sort()
+    if(!dates.length) return
+    const v=src[dates[dates.length-1]]
+    if(!(v.pv||0)&&!(v.bk||0)) return
+    pv+=(v.pv||0); bk+=(v.bk||0); any=true
+  })
+  return any?{pv, bk, ratio:(pv+bk)>0?pv/(pv+bk):0}:null
+}
+function cashGaugeHtml(split, isUSD){
+  if(!split) return ''
+  const cashRatio=1-split.ratio
+  const pct=Math.max(0,Math.min(100,Math.round(cashRatio*100)))
+  const lvl=cashRatio<0.10?'lvl-crit':cashRatio<0.20?'lvl-low':'lvl-ok'
+  const cashLabel=isUSD?`$${Math.round(split.bk/1000).toLocaleString()}K`:`${Math.round(split.bk/10000).toLocaleString()}萬`
+  const cashFull=isUSD?`$${Math.round(split.bk).toLocaleString()}`:`${Math.round(split.bk/10000)} 萬`
+  const stockFull=isUSD?`$${Math.round(split.pv).toLocaleString()}`:`${Math.round(split.pv/10000)} 萬`
+  const warnTxt=lvl==='lvl-crit'?'（現金水位偏低，建議留意）':''
+  return `<div class="cash-gauge-wrap" title="現金 ${cashFull}／股票 ${stockFull}（現金佔比 ${pct}%）${warnTxt}">
+    <div class="cash-gauge ${lvl}">
+      <div class="cash-gauge-nub"></div>
+      <div class="cash-gauge-fill" style="width:${pct}%"></div>
+      <div class="cash-gauge-pct">${pct}%</div>
+      ${lvl==='lvl-crit'?'<div class="cash-warn">⚠️</div>':''}
+    </div>
+    <div class="cash-gauge-label ${lvl}">現金 ${cashLabel}</div>
+  </div>`
+}
 function prevBizSnap(aid,targetDate,snapByDay){
   const inMonth=Object.keys(snapByDay).filter(d=>d<targetDate).sort()
   if(inMonth.length){ const d=inMonth[inMonth.length-1]; return {date:d, total:snapByDay[d]} }
@@ -674,6 +721,7 @@ function renderCal() {
   const hasUSD=usdAccs.length>0&&!isUSDView  // show USD block only in aggregate or TWD view
   const curVal=currentAccsValue(isUSDView?usdAccs:twdAccs)
   const curValUSD=currentAccsValue(usdAccs)
+  const stockSplit=currentStockCashSplit(isUSDView?usdAccs:twdAccs)
 
   document.getElementById('mhdr').innerHTML=`
     <div>
@@ -689,13 +737,18 @@ function renderCal() {
     </div>
     <div>
       <div class="mhdr-subtitle">本金${isAgg?'（合計）':''}</div>
-      ${isAgg||isUSDView
-        ?`<div class="mhdr-big na" style="font-size:26px">${isUSDView?`$${Math.round(usdBase/1000).toLocaleString()}K`:`${Math.round(twdBase/10000)} 萬`}</div>`
-        :`<div style="display:flex;align-items:center;gap:8px">
-           <div class="mhdr-big na" style="font-size:26px">${Math.round(base/10000)} 萬</div>
-           <button class="btn btn-sm" onclick="editCap()">✏️</button>
-         </div>`}
-      <div style="font-size:11px;color:#8a9098;margin-top:3px">目前 ${curVal!=null?(isUSDView?`$${Math.round(curVal/1000).toLocaleString()}K`:`${Math.round(curVal/10000).toLocaleString()} 萬`):'—'}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div>
+          ${isAgg||isUSDView
+            ?`<div class="mhdr-big na" style="font-size:26px">${isUSDView?`$${Math.round(usdBase/1000).toLocaleString()}K`:`${Math.round(twdBase/10000)} 萬`}</div>`
+            :`<div style="display:flex;align-items:center;gap:8px">
+               <div class="mhdr-big na" style="font-size:26px">${Math.round(base/10000)} 萬</div>
+               <button class="btn btn-sm" onclick="editCap()">✏️</button>
+             </div>`}
+          <div style="font-size:11px;color:#8a9098;margin-top:3px">目前 ${curVal!=null?(isUSDView?`$${Math.round(curVal/1000).toLocaleString()}K`:`${Math.round(curVal/10000).toLocaleString()} 萬`):'—'}</div>
+        </div>
+        ${cashGaugeHtml(stockSplit, isUSDView)}
+      </div>
     </div>
     <div>
       <div style="margin-bottom:4px">
